@@ -26,17 +26,12 @@ import org.apache.commons.math3.optim.*;
 import org.apache.commons.math3.optim.InitialGuess;
 import org.apache.commons.math3.optim.PointValuePair;
 import org.apache.commons.math3.optimization.*;
-//import org.apache.commons.math3.optimization.InitialGuess;
+
 import org.apache.commons.math3.optim.nonlinear.scalar.noderiv.PowellOptimizer;
 import org.apache.commons.math3.optim.nonlinear.scalar.ObjectiveFunction;
 
 import com.panayotis.gnuplot.JavaPlot;
-/*import javafx.application.Application;
-import javafx.scene.Scene;
-import javafx.scene.chart.LineChart;
-import javafx.scene.chart.NumberAxis;
-import javafx.scene.chart.XYChart;
-import javafx.stage.Stage;*/
+
 
 import org.apache.commons.math3.fitting.*;
 import org.apache.commons.math3.optim.nonlinear.vector.*;
@@ -50,6 +45,8 @@ public class PlumbLineCalibrationAlgorithm
     private Mat m_SmoothImg;
     private Mat m_EdgesImg;
     private Mat m_DistortionFreeImg;
+    
+    private double m_FocalLengthPixel; 
     
     private ArrayList<LinkedList<Double>> m_VerticalLinesCoordinates;
     private ArrayList<LinkedList<Double>> m_HorizontalLinesCoordinates;
@@ -71,6 +68,7 @@ public class PlumbLineCalibrationAlgorithm
 
     public PlumbLineCalibrationAlgorithm()
     {
+        nu.pattern.OpenCV.loadShared();
         m_PathToImage = new String();
         m_ImgSource = new Mat();
         m_Img = new Mat();
@@ -79,6 +77,8 @@ public class PlumbLineCalibrationAlgorithm
         m_DistortionFreeImg = new Mat();
         m_VerticalLinesCoordinates = new ArrayList<LinkedList<Double>>();
         m_HorizontalLinesCoordinates = new ArrayList<LinkedList<Double>>();
+        m_VerticalLines = new ArrayList<LinkedList<Point>>();
+        m_HorizontalLines = new ArrayList<LinkedList<Point>>();
         
     }
     public void SetPathToImage(String PathToImage)
@@ -129,10 +129,24 @@ public class PlumbLineCalibrationAlgorithm
     {
         m_SubpixelizationMethod = SubpixelizationMethod;
     }
+    public void SetFocalLengthPixel(double FocalLengthPixel)
+    {
+        m_FocalLengthPixel = FocalLengthPixel;
+    }
+
+    public void ClearAll()
+    {
+        m_PathToImage="";
+        
+        m_VerticalLinesCoordinates.clear();
+        m_HorizontalLinesCoordinates.clear();
+        m_VerticalLines.clear();
+        m_HorizontalLines.clear();
+    }
 
     public void ProcessImage()
     {
-        nu.pattern.OpenCV.loadShared();
+        
         m_ImgSource = Imgcodecs.imread(m_PathToImage, Imgcodecs.IMREAD_GRAYSCALE);
 
         Core.bitwise_not( m_ImgSource, m_Img );
@@ -224,7 +238,7 @@ public class PlumbLineCalibrationAlgorithm
 
     public void GetLineMiddleCoordinates()
     {
-        for (int i = 0; i < m_Img.rows(); i++)
+        for (int i = 0; i < m_EdgesImg.rows(); i++)
         {
             int pixelEdges;
             int pixelEdgesNext;
@@ -269,15 +283,15 @@ public class PlumbLineCalibrationAlgorithm
             for (int i = 0; i < m_EdgesImg.rows()-1; i++)
             {
                 pixelEdges = (int)m_EdgesImg.get(i, j)[0];
-                pixelEdgesNext = (int)m_EdgesImg.get(i, j+1)[0];
+                pixelEdgesNext = (int)m_EdgesImg.get(i+1, j)[0];
                 
                 if(pixelEdges < pixelEdgesNext)
                 {
-                    ListOfTransitions.add(new Integer(j));
+                    ListOfTransitions.add(new Integer(i));
                 }
                 else if(pixelEdges > pixelEdgesNext)
                 {
-                    ListOfTransitions.add(new Integer(j+1));
+                    ListOfTransitions.add(new Integer(i+1));
                 }
                                 
             }
@@ -291,6 +305,7 @@ public class PlumbLineCalibrationAlgorithm
             m_HorizontalLinesCoordinates.add(new LinkedList<Double>(ListOfLineYCoord));
              
         }
+        
     }
 
     public void GroupPointsToLines()
@@ -305,7 +320,7 @@ public class PlumbLineCalibrationAlgorithm
                 Iterator<Double> LineIt = Line.iterator();
                 if(Line.size()>1)
                 {
-                    Distance= 0.5*Math.abs(LineIt.next() - LineIt.next());
+                    Distance= 0.9*Math.abs(LineIt.next() - LineIt.next());
                     PrevDistance = Distance;
                 }
                 else
@@ -315,8 +330,10 @@ public class PlumbLineCalibrationAlgorithm
                  
                 LineIt = Line.iterator();
                 LineCounter++;
+                
                 while(LineIt.hasNext())
                 {
+
                     LinkedList<Point> ActualLine = new LinkedList<Point>();
                     double ActXCoord = LineIt.next();
                     ActualLine.add(new Point(ActXCoord, LineCounter));
@@ -355,7 +372,7 @@ public class PlumbLineCalibrationAlgorithm
                 Iterator<Double> LineIt = Line.iterator();
                 if(Line.size()>1)
                 {
-                    Distance= 0.5*Math.abs(LineIt.next() - LineIt.next());
+                    Distance= 0.9*Math.abs(LineIt.next() - LineIt.next());
                     PrevDistance = Distance;
                 }
                 else
@@ -371,9 +388,9 @@ public class PlumbLineCalibrationAlgorithm
                     double ActYCoord = LineIt.next();
                     ActualLine.add(new Point(LineCounter, ActYCoord));
                     
-                    for(int LocLineCounter=LineCounter; LocLineCounter<m_VerticalLinesCoordinates.size(); LocLineCounter++)
+                    for(int LocLineCounter=LineCounter; LocLineCounter<m_HorizontalLinesCoordinates.size(); LocLineCounter++)
                     {
-                        LinkedList<Double> LineToCheck = m_VerticalLinesCoordinates.get(LocLineCounter);
+                        LinkedList<Double> LineToCheck = m_HorizontalLinesCoordinates.get(LocLineCounter);
                         for(double LineToCheckElement : LineToCheck)
                         {
                             if(Math.abs(ActYCoord-LineToCheckElement)<=Distance)
@@ -394,6 +411,7 @@ public class PlumbLineCalibrationAlgorithm
             }
             
         }
+        
     }
 
     
@@ -427,7 +445,21 @@ public class PlumbLineCalibrationAlgorithm
                 //private static final long serialVersionUID = -8673650298627399464L;
                 public double value(double[] Distortion) 
                 {
+                    final WeightedObservedPoints obs = new WeightedObservedPoints();
+                    
+                    obs.add(-1.00, 2.021170021833143);
+                    obs.add(-0.99, 2.221135431136975);
+                    obs.add(-0.98, 2.09985277659314);
+                    obs.add(-0.97, 2.0211192647627025);
+                    // ... Lots of lines omitted ...
+                    obs.add(0.99, -2.4345814727089854);
 
+                    // Instantiate a third-degree polynomial fitter.
+                    final PolynomialCurveFitter fitter = PolynomialCurveFitter.create(3);
+
+                    // Retrieve fitted parameters (coefficients of the polynomial function).
+                    final double[] coeff = fitter.fit(obs.toList());
+                    
                     return 0.0;
                 }
             };
