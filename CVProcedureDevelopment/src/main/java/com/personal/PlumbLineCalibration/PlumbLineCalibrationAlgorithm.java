@@ -31,6 +31,8 @@ import org.apache.commons.math3.optim.PointValuePair;
 import org.apache.commons.math3.optimization.*;
 
 import org.apache.commons.math3.optim.nonlinear.scalar.noderiv.PowellOptimizer;
+import org.apache.commons.math3.optim.nonlinear.scalar.noderiv.BOBYQAOptimizer;
+import org.apache.commons.math3.optim.SimpleBounds;
 import org.apache.commons.math3.optim.nonlinear.scalar.ObjectiveFunction;
 
 import com.panayotis.gnuplot.JavaPlot;
@@ -456,28 +458,7 @@ public class PlumbLineCalibrationAlgorithm
     
     public void OptimizeCameraModel()
     {
-        double Xh=0.0;
-        double Yh=0.0;
-        double K1=1.0e-3;
-        double K2=1.0e-4;
-        double P1=1.0e-4;
-        double P2=1.0e-4;
-        double K3=1.0e-5;
-        
-        MaxEval maxEval = new MaxEval(50000);
-        double[] initials = new double[]{
-            Xh,
-            Yh,
-            K1,
-            K2,
-            P1,
-            P2,
-            K3,
-        };  
-        double[] result_point = new double[initials.length];
-        InitialGuess start_values = new InitialGuess(initials);
-        PowellOptimizer optimizer = new PowellOptimizer(1e-8, 1e-4);
-        
+            
         
         
         MultivariateFunction ErrFunc=new  MultivariateFunction() {
@@ -485,18 +466,70 @@ public class PlumbLineCalibrationAlgorithm
                 public double value(double[] Distortion) 
                 {
                     double Error = 0.0;
-                    Mat CameraMatrix = new Mat(3, 3, 5/*CV_64F*/);
-                    Mat DistCoeffs = new Mat(5,1, 5/*CV_64F*/);
+                    Mat CameraMatrix = new Mat(3, 3, 6/*CV_64F*/);
+                    Mat DistCoeffs = new Mat(1,5, 6/*CV_64F*/);
+                    double Hx = 0.0;
+                    double Hy = 0.0;
+                    double K1 = 0.0;
+                    double K2 = 0.0;
+                    double P1 = 0.0;
+                    double P2 = 0.0;
+                    double K3 = 0.0;
 
-                    CameraMatrix.put(0, 0, m_FocalLengthXPixel); CameraMatrix.put(0, 1, 0.0); CameraMatrix.put(0, 2, Distortion[0]);
-                    CameraMatrix.put(1, 0, 0.0); CameraMatrix.put(1, 1, m_FocalLengthYPixel); CameraMatrix.put(1, 2, Distortion[1]);
+                    if(Distortion.length == 2)
+                    {
+                        Hx = Distortion[0];
+                        Hy = Distortion[1];
+                    }
+                    else if(Distortion.length == 3)
+                    {
+                        Hx = Distortion[0];
+                        Hy = Distortion[1];
+                        K1 = Distortion[2];
+                    }
+                    else if(Distortion.length == 4)
+                    {
+                        Hx = Distortion[0];
+                        Hy = Distortion[1];
+                        K1 = Distortion[2];
+                        K2 = Distortion[3];
+                    }
+                    else if(Distortion.length == 5)
+                    {
+                        Hx = Distortion[0];
+                        Hy = Distortion[1];
+                        K1 = Distortion[2];
+                        K2 = Distortion[3];
+                        P1 = Distortion[4];
+                    }
+                    else if(Distortion.length == 6)
+                    {
+                        Hx = Distortion[0];
+                        Hy = Distortion[1];
+                        K1 = Distortion[2];
+                        K2 = Distortion[3];
+                        P1 = Distortion[4];
+                        P2 = Distortion[5];
+                    }
+                    else if(Distortion.length == 7)
+                    {
+                        Hx = Distortion[0];
+                        Hy = Distortion[1];
+                        K1 = Distortion[2];
+                        K2 = Distortion[3];
+                        P1 = Distortion[4];
+                        P2 = Distortion[5];
+                        K3 = Distortion[6];
+                    }
+                    CameraMatrix.put(0, 0, m_FocalLengthXPixel); CameraMatrix.put(0, 1, 0.0); CameraMatrix.put(0, 2, Hx);
+                    CameraMatrix.put(1, 0, 0.0); CameraMatrix.put(1, 1, m_FocalLengthYPixel); CameraMatrix.put(1, 2, Hy);
                     CameraMatrix.put(2, 0, 0.0); CameraMatrix.put(2, 1, 0.0); CameraMatrix.put(2, 2, 1.0);
 
-                    DistCoeffs.put(0,0,Distortion[2]);
-                    DistCoeffs.put(1,0,Distortion[3]);
-                    DistCoeffs.put(2,0,Distortion[4]);
-                    DistCoeffs.put(3,0,Distortion[5]);
-                    DistCoeffs.put(4,0,Distortion[6]);
+                    DistCoeffs.put(0,0,K1);
+                    DistCoeffs.put(0,1,K2);
+                    DistCoeffs.put(0,2,P1);
+                    DistCoeffs.put(0,3,P2);
+                    DistCoeffs.put(0,4,K3);
                     
                     for(LinkedList<Point>VerticalLine : m_VerticalLines)
                     {
@@ -524,7 +557,7 @@ public class PlumbLineCalibrationAlgorithm
                                 double[] DstPoint = DstPoints.get(i, 0);
                                 DstPoint[0] = DstPoint[0]*m_FocalLengthXPixel;
                                 DstPoint[1] = DstPoint[1]*m_FocalLengthYPixel;
-                                double diff = coeff[0]+coeff[1]*DstPoint[1]-DstPoint[0];
+                                double diff = (coeff[0]+coeff[1]*DstPoint[1]-DstPoint[0]);
                                 Error += diff*diff;
                             }
 
@@ -532,21 +565,131 @@ public class PlumbLineCalibrationAlgorithm
                         }
                         
                     }
-                                       
+                    
+                    for(LinkedList<Point>HorizontalLine : m_HorizontalLines)
+                    {
+                        if(HorizontalLine.size()>=(2*m_ImgSource.rows()/3))
+                        {
+                            final WeightedObservedPoints obs = new WeightedObservedPoints();
+                            MatOfPoint2f SrcPoints = new MatOfPoint2f();
+                            MatOfPoint2f DstPoints = new MatOfPoint2f();
+                            SrcPoints.fromList(HorizontalLine);
+                            DstPoints.fromList(HorizontalLine);
+                            Calib3d.undistortPoints(SrcPoints, DstPoints, CameraMatrix, DistCoeffs);
+                            for(int i=0; i < HorizontalLine.size(); i++)
+                            {
+                                double[] DstPoint = DstPoints.get(i, 0);
+                                DstPoint[0] = DstPoint[0]*m_FocalLengthXPixel;
+                                DstPoint[1] = DstPoint[1]*m_FocalLengthYPixel;
+                                obs.add(DstPoint[0], DstPoint[1]);
+                            }                            
+                            
+                            final PolynomialCurveFitter fitter = PolynomialCurveFitter.create(1);
+                            final double[] coeff = fitter.fit(obs.toList());
+
+                            for(int i=0; i < HorizontalLine.size(); i++)
+                            {
+                                double[] DstPoint = DstPoints.get(i, 0);
+                                DstPoint[0] = DstPoint[0]*m_FocalLengthXPixel;
+                                DstPoint[1] = DstPoint[1]*m_FocalLengthYPixel;
+                                double diff = (coeff[0]+coeff[1]*DstPoint[0]-DstPoint[1]);
+                                Error += diff*diff;
+                            }
+
+                            
+                        }
+                        
+                    }
                     return Error;
                 }
             };
 
         
         ObjectiveFunction OFErrFunc = new ObjectiveFunction(ErrFunc);
+        
+        double Xh=0.5*m_ImgSource.cols();
+        double Yh=0.5*m_ImgSource.rows();
+        double K1=0.0;
+        double K2=0.0;
+        double P1=0.0;
+        double P2=0.0;
+        double K3=0.0;
+        
+        MaxEval maxEval = new MaxEval(50000);
+        double[] initials = new double[]{
+            Xh,
+            Yh,
+            K1,
+            K2,
+            P1,
+            P2,
+            K3
+        };  
+        double[] result_point = new double[initials.length];
+        double[] LowerBoundary = new double[initials.length];
+        double[] UpperBoundary = new double[initials.length];
+        LowerBoundary[0] = 0.3*m_ImgSource.cols();
+        LowerBoundary[1] = 0.3*m_ImgSource.rows();
+        LowerBoundary[2] = -1.0e-3;
+        LowerBoundary[3] = -1.0e-3;
+        LowerBoundary[4] = -1.0e-3;
+        LowerBoundary[5] = -1.0e-3;
+        LowerBoundary[6] = -1.0e-3;
+
+        UpperBoundary[0] = 0.8*m_ImgSource.cols();
+        UpperBoundary[1] = 0.8*m_ImgSource.rows();
+        UpperBoundary[2] = 1.0e-3;
+        UpperBoundary[3] = 1.0e-3;
+        UpperBoundary[4] = 1.0e-3;
+        UpperBoundary[5] = 1.0e-3;
+        UpperBoundary[6] = 1.0e-3;
+
+        InitialGuess start_values = new InitialGuess(initials);
+        SimpleBounds Bounds = new SimpleBounds(LowerBoundary, UpperBoundary);
+        BOBYQAOptimizer optim = new BOBYQAOptimizer(2*(initials.length)+1);
+        //optim.optimize(OFErrFunc, start_values, maxEval, Bounds);
+        
+        PowellOptimizer optimizer = new PowellOptimizer(1e-4, 1e-2);
+        
         try {
-            PointValuePair result = optimizer.optimize(  OFErrFunc,start_values, maxEval);
+            PointValuePair result = optim.optimize(OFErrFunc, start_values, maxEval, Bounds);
             result_point = result.getPoint();
+            
         }
         catch (TooManyEvaluationsException e) {
             for (int i = 0; i < result_point.length; i++) {
                 result_point[i] = Double.NaN;
             }
         }
+
+        Mat CameraMatrix = new Mat(3, 3, 6/*CV_64F*/);
+        Mat DistCoeffs = new Mat(1,5, 6/*CV_64F*/);
+        Xh = result_point[0];
+        Yh = result_point[1];
+        K1 = result_point[2];
+        K2 = result_point[3];
+        P1 = result_point[4];
+        P2 = result_point[5];
+        K3 = result_point[6];
+
+        
+        CameraMatrix.put(0, 0, m_FocalLengthXPixel); CameraMatrix.put(0, 1, 0.0); CameraMatrix.put(0, 2, Xh);
+        CameraMatrix.put(1, 0, 0.0); CameraMatrix.put(1, 1, m_FocalLengthYPixel); CameraMatrix.put(1, 2, Yh);
+        CameraMatrix.put(2, 0, 0.0); CameraMatrix.put(2, 1, 0.0); CameraMatrix.put(2, 2, 1.0);
+
+        DistCoeffs.put(0,0,K1);
+        DistCoeffs.put(0,1,K2);
+        DistCoeffs.put(0,2,P1);
+        DistCoeffs.put(0,3,P2);
+        DistCoeffs.put(0,4,K3);
+        
+        Calib3d.undistort(m_ImgSource, m_DistortionFreeImg, CameraMatrix, DistCoeffs);
+        
+        Mat ResizeImage = new Mat();
+        Size ScaleSize = new Size(m_ImgSource.cols()/2, m_ImgSource.rows()/2);
+        Imgproc.resize(m_DistortionFreeImg, ResizeImage, ScaleSize,0,0,Imgproc.INTER_AREA);
+        HighGui.namedWindow("Distortion free image", HighGui.WINDOW_AUTOSIZE);
+        HighGui.imshow("Distortion free image", ResizeImage);
+        HighGui.waitKey();
     } 
 };

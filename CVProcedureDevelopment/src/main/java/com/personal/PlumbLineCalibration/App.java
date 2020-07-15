@@ -37,7 +37,7 @@ public class App
         CVProc.ProcessImage();
         CVProc.GetLineMiddleCoordinates();
         CVProc.GroupPointsToLines();
-        CVProc.TransformLinesCoordinatesToCenter();
+        //CVProc.TransformLinesCoordinatesToCenter();
         CVProc.OptimizeCameraModel();
     }
 }
