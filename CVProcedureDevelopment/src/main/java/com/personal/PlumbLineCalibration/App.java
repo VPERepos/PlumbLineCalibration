@@ -17,7 +17,10 @@ public class App
     {
         PlumbLineCalibrationAlgorithm CVProc = new PlumbLineCalibrationAlgorithm();
 
-        CVProc.SetFocalLengthPixel(2714.285714286);// Raspberry Pi Camera F=3.04 mm / Pixel width 1.12 µm
+        CVProc.SetFocalLengthXPixel(2714.285714286);// Raspberry Pi Camera F=3.04 mm / Pixel width 1.12 µm
+        CVProc.SetFocalLengthYPixel(2714.285714286);
+        CVProc.SetPixelWidthXmm(0.00112);
+        CVProc.SetPixelWidthXmm(0.00112);
         CVProc.SetBilateralFilterNeighbourHoodDiamter(9);
         CVProc.SetBilateralFilterSigmaColor(7);
         CVProc.SetBilateralSigmaSpace(7);
@@ -34,5 +37,7 @@ public class App
         CVProc.ProcessImage();
         CVProc.GetLineMiddleCoordinates();
         CVProc.GroupPointsToLines();
+        CVProc.TransformLinesCoordinatesToCenter();
+        CVProc.OptimizeCameraModel();
     }
 }

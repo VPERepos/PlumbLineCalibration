@@ -3,15 +3,18 @@ package com.personal.PlumbLineCalibration;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedList;
+import java.util.List;
 
 import org.opencv.core.Core;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
+import org.opencv.core.MatOfPoint2f;
 import org.opencv.imgproc.Imgproc;
 import org.opencv.imgcodecs.Imgcodecs;
 import org.opencv.core.Point;
 import org.opencv.core.Size;
 import org.opencv.highgui.HighGui;
+import org.opencv.calib3d.*;
 
 import java.io.FileWriter;
 import java.io.IOException;
@@ -46,7 +49,10 @@ public class PlumbLineCalibrationAlgorithm
     private Mat m_EdgesImg;
     private Mat m_DistortionFreeImg;
     
-    private double m_FocalLengthPixel; 
+    private double m_FocalLengthXPixel;
+    private double m_FocalLengthYPixel;
+    private double m_PixelWidthXmm;
+    private double m_PixelWidthYmm; 
     
     private ArrayList<LinkedList<Double>> m_VerticalLinesCoordinates;
     private ArrayList<LinkedList<Double>> m_HorizontalLinesCoordinates;
@@ -129,9 +135,21 @@ public class PlumbLineCalibrationAlgorithm
     {
         m_SubpixelizationMethod = SubpixelizationMethod;
     }
-    public void SetFocalLengthPixel(double FocalLengthPixel)
+    public void SetFocalLengthXPixel(double FocalLengthXPixel)
     {
-        m_FocalLengthPixel = FocalLengthPixel;
+        m_FocalLengthXPixel = FocalLengthXPixel;
+    }
+    public void SetFocalLengthYPixel(double FocalLengthYPixel)
+    {
+        m_FocalLengthYPixel = FocalLengthYPixel;
+    }
+    public void SetPixelWidthXmm(double PixelWidthXmm)
+    {
+        m_PixelWidthXmm = PixelWidthXmm;
+    }
+    public void SetPixelWidthYmm(double PixelWidthYmm)
+    {
+        m_PixelWidthYmm = PixelWidthYmm;
     }
 
     public void ClearAll()
@@ -413,17 +431,38 @@ public class PlumbLineCalibrationAlgorithm
         }
         
     }
+    public void TransformLinesCoordinatesToCenter()
+    {
+        for(LinkedList<Point>VerticalLine : m_VerticalLines)
+        {
+            for(Point ActualPoint : VerticalLine)
+            {
+                ActualPoint.x = ActualPoint.x - 0.5*m_ImgSource.rows();
+                ActualPoint.y = ActualPoint.y - 0.5*m_ImgSource.cols();
+            }
 
+        }
+
+        for(LinkedList<Point>HorizonatalLine : m_HorizontalLines)
+        {
+            for(Point ActualPoint : HorizonatalLine)
+            {
+                ActualPoint.x = ActualPoint.x - 0.5*m_ImgSource.rows();
+                ActualPoint.y = ActualPoint.y - 0.5*m_ImgSource.cols();
+            }
+
+        }
+    }
     
     public void OptimizeCameraModel()
     {
         double Xh=0.0;
         double Yh=0.0;
-        double K1=0.0;
-        double K2=0.0;
-        double P1=0.0;
-        double P2=0.0;
-        double K3=0.0;
+        double K1=1.0e-3;
+        double K2=1.0e-4;
+        double P1=1.0e-4;
+        double P2=1.0e-4;
+        double K3=1.0e-5;
         
         MaxEval maxEval = new MaxEval(50000);
         double[] initials = new double[]{
@@ -437,7 +476,7 @@ public class PlumbLineCalibrationAlgorithm
         };  
         double[] result_point = new double[initials.length];
         InitialGuess start_values = new InitialGuess(initials);
-        PowellOptimizer optimizer = new PowellOptimizer(1e-4, 1e-2);
+        PowellOptimizer optimizer = new PowellOptimizer(1e-8, 1e-4);
         
         
         
@@ -445,29 +484,63 @@ public class PlumbLineCalibrationAlgorithm
                 //private static final long serialVersionUID = -8673650298627399464L;
                 public double value(double[] Distortion) 
                 {
-                    final WeightedObservedPoints obs = new WeightedObservedPoints();
-                    
-                    obs.add(-1.00, 2.021170021833143);
-                    obs.add(-0.99, 2.221135431136975);
-                    obs.add(-0.98, 2.09985277659314);
-                    obs.add(-0.97, 2.0211192647627025);
-                    // ... Lots of lines omitted ...
-                    obs.add(0.99, -2.4345814727089854);
+                    double Error = 0.0;
+                    Mat CameraMatrix = new Mat(3, 3, 5/*CV_64F*/);
+                    Mat DistCoeffs = new Mat(5,1, 5/*CV_64F*/);
 
-                    // Instantiate a third-degree polynomial fitter.
-                    final PolynomialCurveFitter fitter = PolynomialCurveFitter.create(3);
+                    CameraMatrix.put(0, 0, m_FocalLengthXPixel); CameraMatrix.put(0, 1, 0.0); CameraMatrix.put(0, 2, Distortion[0]);
+                    CameraMatrix.put(1, 0, 0.0); CameraMatrix.put(1, 1, m_FocalLengthYPixel); CameraMatrix.put(1, 2, Distortion[1]);
+                    CameraMatrix.put(2, 0, 0.0); CameraMatrix.put(2, 1, 0.0); CameraMatrix.put(2, 2, 1.0);
 
-                    // Retrieve fitted parameters (coefficients of the polynomial function).
-                    final double[] coeff = fitter.fit(obs.toList());
+                    DistCoeffs.put(0,0,Distortion[2]);
+                    DistCoeffs.put(1,0,Distortion[3]);
+                    DistCoeffs.put(2,0,Distortion[4]);
+                    DistCoeffs.put(3,0,Distortion[5]);
+                    DistCoeffs.put(4,0,Distortion[6]);
                     
-                    return 0.0;
+                    for(LinkedList<Point>VerticalLine : m_VerticalLines)
+                    {
+                        if(VerticalLine.size()>=(2*m_ImgSource.cols()/3))
+                        {
+                            final WeightedObservedPoints obs = new WeightedObservedPoints();
+                            MatOfPoint2f SrcPoints = new MatOfPoint2f();
+                            MatOfPoint2f DstPoints = new MatOfPoint2f();
+                            SrcPoints.fromList(VerticalLine);
+                            DstPoints.fromList(VerticalLine);
+                            Calib3d.undistortPoints(SrcPoints, DstPoints, CameraMatrix, DistCoeffs);
+                            for(int i=0; i < VerticalLine.size(); i++)
+                            {
+                                double[] DstPoint = DstPoints.get(i, 0);
+                                DstPoint[0] = DstPoint[0]*m_FocalLengthXPixel;
+                                DstPoint[1] = DstPoint[1]*m_FocalLengthYPixel;
+                                obs.add(DstPoint[1], DstPoint[0]);
+                            }                            
+                            
+                            final PolynomialCurveFitter fitter = PolynomialCurveFitter.create(1);
+                            final double[] coeff = fitter.fit(obs.toList());
+
+                            for(int i=0; i < VerticalLine.size(); i++)
+                            {
+                                double[] DstPoint = DstPoints.get(i, 0);
+                                DstPoint[0] = DstPoint[0]*m_FocalLengthXPixel;
+                                DstPoint[1] = DstPoint[1]*m_FocalLengthYPixel;
+                                double diff = coeff[0]+coeff[1]*DstPoint[1]-DstPoint[0];
+                                Error += diff*diff;
+                            }
+
+                            
+                        }
+                        
+                    }
+                                       
+                    return Error;
                 }
             };
 
         
         ObjectiveFunction OFErrFunc = new ObjectiveFunction(ErrFunc);
         try {
-            PointValuePair result = optimizer.optimize(  OFErrFunc, start_values, maxEval);
+            PointValuePair result = optimizer.optimize(  OFErrFunc,start_values, maxEval);
             result_point = result.getPoint();
         }
         catch (TooManyEvaluationsException e) {
