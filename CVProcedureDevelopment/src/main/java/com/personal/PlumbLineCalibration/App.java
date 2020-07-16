@@ -32,7 +32,7 @@ public class App
         CVProc.SetPlumbLineWidthLower(5);
         CVProc.SetPlumbLineWidthUpper(11);
         CVProc.SetSubpixelizationMethod("BellCurveFit"); // "WeightedAverage"
-        CVProc.SetPathToImage("PlumbLineCalib1.jpg");
+        CVProc.SetPathToImage("PlumbLineCalib1.jpg"/*"DIstortionFreeImage.jpg"*/);
 
         CVProc.ProcessImage();
         CVProc.GetLineMiddleCoordinates();
