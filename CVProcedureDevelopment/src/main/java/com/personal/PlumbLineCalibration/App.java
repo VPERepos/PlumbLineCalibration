@@ -17,10 +17,11 @@ public class App
     {
         PlumbLineCalibrationAlgorithm CVProc = new PlumbLineCalibrationAlgorithm();
 
-        CVProc.SetFocalLengthXPixel(2714.285714286);// Raspberry Pi Camera F=3.04 mm / Pixel width 1.12 µm
-        CVProc.SetFocalLengthYPixel(2714.285714286);
-        CVProc.SetPixelWidthXmm(0.00112);
-        CVProc.SetPixelWidthXmm(0.00112);
+        
+        CVProc.SetFocalLengthXPixel(6615);// Artificial image
+        CVProc.SetFocalLengthYPixel(4678);
+        CVProc.SetPixelWidthXmm(0.00155);//For example
+        CVProc.SetPixelWidthXmm(0.00155);
         CVProc.SetBilateralFilterNeighbourHoodDiamter(9);
         CVProc.SetBilateralFilterSigmaColor(7);
         CVProc.SetBilateralSigmaSpace(7);
@@ -29,10 +30,10 @@ public class App
         CVProc.SetCannyThreshold2(50);
         CVProc.SetCannyUseL2Gradient(true);
         CVProc.SetDilateErodeKernelSize(5);
-        CVProc.SetPlumbLineWidthLower(5);
+        CVProc.SetPlumbLineWidthLower(2);
         CVProc.SetPlumbLineWidthUpper(11);
-        CVProc.SetSubpixelizationMethod("BellCurveFit"); // "WeightedAverage"
-        CVProc.SetPathToImage("PlumbLineCalib1.jpg"/*"DIstortionFreeImage.jpg"*/);
+        CVProc.SetSubpixelizationMethod("WeightedAverage"); // "BellCurveFit"
+        CVProc.SetPathToImage("PlumbLineRasterDistorted.png");
 
         CVProc.ProcessImage();
         CVProc.GetLineMiddleCoordinates();

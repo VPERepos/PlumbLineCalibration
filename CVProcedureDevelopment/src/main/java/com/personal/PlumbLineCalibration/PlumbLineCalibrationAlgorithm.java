@@ -71,10 +71,10 @@ public class PlumbLineCalibrationAlgorithm
     private double m_PixelWidthYmm; 
     
     private final ArrayList<LinkedList<Double>> m_VerticalLinesCoordinates;
-    private final ArrayList<LinkedList<Double>> m_HorizontalLinesCoordinates;
+    
 
     ArrayList<LinkedList<Point>> m_VerticalLines;
-    ArrayList<LinkedList<Point>> m_HorizontalLines;
+    
 
     private int m_BilateralFilterNeighbourHoodDiamter;// default 9
     private int m_BilateralFilterSigmaColor;// default 7
@@ -98,9 +98,9 @@ public class PlumbLineCalibrationAlgorithm
         m_EdgesImg = new Mat();
         m_DistortionFreeImg = new Mat();
         m_VerticalLinesCoordinates = new ArrayList<LinkedList<Double>>();
-        m_HorizontalLinesCoordinates = new ArrayList<LinkedList<Double>>();
+        
         m_VerticalLines = new ArrayList<LinkedList<Point>>();
-        m_HorizontalLines = new ArrayList<LinkedList<Point>>();
+        
         
     }
     public void SetPathToImage(final String PathToImage)
@@ -173,9 +173,9 @@ public class PlumbLineCalibrationAlgorithm
         m_PathToImage="";
         
         m_VerticalLinesCoordinates.clear();
-        m_HorizontalLinesCoordinates.clear();
+        
         m_VerticalLines.clear();
-        m_HorizontalLines.clear();
+        
     }
 
     public void ProcessImage()
@@ -208,6 +208,7 @@ public class PlumbLineCalibrationAlgorithm
         HighGui.namedWindow("Distortion free image", HighGui.WINDOW_AUTOSIZE);
         HighGui.imshow("Distortion free image", ResizeImage);
         HighGui.waitKey();*/
+        //Imgcodecs.imwrite("ImageCannyMask.jpg", m_EdgesImg);
     }
 
     private double SubpixelPositionX(final int YCoord, final int StartPos, final int StopPos, final Mat Img, final String Method)
@@ -233,10 +234,11 @@ public class PlumbLineCalibrationAlgorithm
             double AccumulatedIntensity=0.0;
             double AccumulatedIntensityTimesPos=0.0;
 
-            for(int ImgIndex = 0; ImgIndex <= StopPos-StartPos; ImgIndex++)
+            for(int ImgIndex = 1; ImgIndex <= StopPos-StartPos; ImgIndex++)
             {
-                AccumulatedIntensityTimesPos+=ImgIndex*((double)Img.get(YCoord, ImgIndex+StartPos)[0]);
-                AccumulatedIntensity+=((double)Img.get(YCoord, ImgIndex+StartPos)[0]);
+                double ImgIntensity = (double)Img.get(YCoord, ImgIndex+StartPos-1)[0];
+                AccumulatedIntensityTimesPos+=ImgIndex*ImgIntensity;
+                AccumulatedIntensity+=ImgIntensity;
             }
             SubPixelPos=StartPos+AccumulatedIntensityTimesPos/AccumulatedIntensity;
         }
@@ -281,16 +283,16 @@ public class PlumbLineCalibrationAlgorithm
     {
         for (int i = 0; i < m_EdgesImg.rows(); i++)
         {
-            int pixelEdges;
-            int pixelEdgesNext;
+            double pixelEdges;
+            double pixelEdgesNext;
             
             final ArrayList<Integer> ListOfTransitions = new ArrayList<Integer>();
             final LinkedList<Double> ListOfLineXCoord = new LinkedList<Double>();
             
             for (int j = 0; j < m_EdgesImg.cols()-1; j++)
             {
-                pixelEdges = (int)m_EdgesImg.get(i, j)[0];
-                pixelEdgesNext = (int)m_EdgesImg.get(i, j+1)[0];
+                pixelEdges = m_EdgesImg.get(i, j)[0];
+                pixelEdgesNext = m_EdgesImg.get(i, j+1)[0];
                 
                 if(pixelEdges < pixelEdgesNext)
                 {
@@ -313,41 +315,7 @@ public class PlumbLineCalibrationAlgorithm
             m_VerticalLinesCoordinates.add(new LinkedList<Double>(ListOfLineXCoord));
              
         }
-
-        for (int j = 0; j < m_Img.cols(); j++)
-        {
-            int pixelEdges;
-            int pixelEdgesNext;
-            
-            final ArrayList<Integer> ListOfTransitions = new ArrayList<Integer>();
-            final LinkedList<Double> ListOfLineYCoord = new LinkedList<Double>();
-            
-            for (int i = 0; i < m_EdgesImg.rows()-1; i++)
-            {
-                pixelEdges = (int)m_EdgesImg.get(i, j)[0];
-                pixelEdgesNext = (int)m_EdgesImg.get(i+1, j)[0];
-                
-                if(pixelEdges < pixelEdgesNext)
-                {
-                    ListOfTransitions.add(new Integer(i));
-                }
-                else if(pixelEdges > pixelEdgesNext)
-                {
-                    ListOfTransitions.add(new Integer(i+1));
-                }
-                                
-            }
-            for(int Index = 0; Index < ListOfTransitions.size()-1; Index++)
-            {
-                if((ListOfTransitions.get(Index+1) - ListOfTransitions.get(Index))<= m_PlumbLineWidthUpper && (ListOfTransitions.get(Index+1) - ListOfTransitions.get(Index)) >= m_PlumbLineWidthLower )
-                {
-                    ListOfLineYCoord.add(new Double(SubpixelPositionY(j, (int)ListOfTransitions.get(Index)-1, (int)ListOfTransitions.get(Index+1)+1, m_SmoothImg, m_SubpixelizationMethod)));
-                    
-                }
-            }
-            m_HorizontalLinesCoordinates.add(new LinkedList<Double>(ListOfLineYCoord));
-             
-        }
+        
         //System.out.println("yo");
     }
 
@@ -386,7 +354,7 @@ public class PlumbLineCalibrationAlgorithm
                         final LinkedList<Double> LineToCheck = m_VerticalLinesCoordinates.get(LocLineCounter);
                         for(final double LineToCheckElement : LineToCheck)
                         {
-                            if(Math.abs(ActXCoord-LineToCheckElement)<=Distance)
+                            if(Math.abs(ActXCoord-LineToCheckElement)<=10/*Distance*/)
                             {
                                 ActualLine.add(new Point(LineToCheckElement, LocLineCounter));
                                 LineToCheck.remove(LineToCheckElement);
@@ -408,52 +376,9 @@ public class PlumbLineCalibrationAlgorithm
         LineCounter=0;
         PrevDistance=0.0;
         Distance = 0.0;      
-        for(final LinkedList<Double> Line : m_HorizontalLinesCoordinates)
-        {
-            if(Line.size()>0)
-            {
-                Iterator<Double> LineIt = Line.iterator();
-                if(Line.size()>1)
-                {
-                    Distance= 0.9*Math.abs(LineIt.next() - LineIt.next());
-                    PrevDistance = Distance;
-                }
-                else
-                {
-                    Distance = PrevDistance;
-                }
-                 
-                LineIt = Line.iterator();
-                LineCounter++;
-                while(LineIt.hasNext())
-                {
-                    final LinkedList<Point> ActualLine = new LinkedList<Point>();
-                    final double ActYCoord = LineIt.next();
-                    ActualLine.add(new Point(LineCounter, ActYCoord));
-                    
-                    for(int LocLineCounter=LineCounter; LocLineCounter<m_HorizontalLinesCoordinates.size(); LocLineCounter++)
-                    {
-                        final LinkedList<Double> LineToCheck = m_HorizontalLinesCoordinates.get(LocLineCounter);
-                        for(final double LineToCheckElement : LineToCheck)
-                        {
-                            if(Math.abs(ActYCoord-LineToCheckElement)<=Distance)
-                            {
-                                ActualLine.add(new Point(LocLineCounter, LineToCheckElement));
-                                LineToCheck.remove(LineToCheckElement);
-                                break;
-                            }
-                        }
-                    }
-                    m_HorizontalLines.add(new LinkedList<Point>(ActualLine));
-                    if(Line.size()>0)
-                    {   
-                        Line.removeFirst();
-                    }
-                    LineIt = Line.iterator();
-                }
-            }
+        
             
-        }
+        
         
     }
     public void TransformLinesCoordinatesToCenter()
@@ -467,16 +392,7 @@ public class PlumbLineCalibrationAlgorithm
             }
 
         }
-
-        for(final LinkedList<Point>HorizonatalLine : m_HorizontalLines)
-        {
-            for(final Point ActualPoint : HorizonatalLine)
-            {
-                ActualPoint.x = ActualPoint.x - 0.5*m_ImgSource.rows();
-                ActualPoint.y = ActualPoint.y - 0.5*m_ImgSource.cols();
-            }
-
-        }
+        
     }
     
     public void OptimizeCameraModel()
@@ -625,45 +541,7 @@ public class PlumbLineCalibrationAlgorithm
                         }
                         
                     }
-                    
-                    for(final LinkedList<Point>HorizontalLine : m_HorizontalLines)
-                    {
-                        if(HorizontalLine.size()>=(2*m_ImgSource.cols()/3))
-                        {
-                            final WeightedObservedPoints obs = new WeightedObservedPoints();
-                            final MatOfPoint2f SrcPoints = new MatOfPoint2f();
-                            final MatOfPoint2f DstPoints = new MatOfPoint2f();
-                            SrcPoints.fromList(HorizontalLine);
-                            DstPoints.fromList(HorizontalLine);
-                            Calib3d.undistortPoints(SrcPoints, DstPoints, CameraMatrix, DistCoeffs);
-                            for(int i=0; i < HorizontalLine.size(); i++)
-                            {
-                                final double[] DstPoint = DstPoints.get(i, 0);
-                                
-                                DstPoint[0] = DstPoint[0]*m_FocalLengthXPixel+HxLoc;
-                                DstPoint[1] = DstPoint[1]*m_FocalLengthYPixel+HyLoc;
-                                obs.add(DstPoint[0], DstPoint[1]);
-                            }                            
-                            
-                            
-                            final double[] coeff = fitter.fit(obs.toList());
-
-                            for(int i=0; i < HorizontalLine.size(); i++)
-                            {
-                                final double[] DstPoint = DstPoints.get(i, 0);
-                                DstPoint[0] = DstPoint[0]*m_FocalLengthXPixel+HxLoc;
-                                DstPoint[1] = DstPoint[1]*m_FocalLengthYPixel+HyLoc;
-                                final double diff = (coeff[0]+coeff[1]*DstPoint[0]-DstPoint[1]);
-                                if(Math.abs(diff)<20.0)
-                                {
-                                    Error += diff*diff;
-                                }
-                            }
-
-                            
-                        }
-                        
-                    }
+                                        
                     return 1.0/Error;
                 }
             };
@@ -673,7 +551,7 @@ public class PlumbLineCalibrationAlgorithm
         
         double Xh=0.5*m_ImgSource.cols();
         double Yh=0.5*m_ImgSource.rows();
-        double K1=0.0;
+        double K1=0.1;
         double K2=0.0;
         double P1=0.0;
         double P2=0.0;
@@ -682,45 +560,45 @@ public class PlumbLineCalibrationAlgorithm
         double K5=0.0;
         double K6=0.0;
         
-        final MaxEval maxEval = new MaxEval(50000);
-        final double[] initials = new double[]{
+        final MaxEval maxEval = new MaxEval(5000000);
+        double[] initials = new double[]{
             Xh,
             Yh,
-            K1,
+            K1/*,
             K2,
             P1,
             P2,
             K3,
             K4,
             K5,
-            K6
+            K6*/
         };  
         double[] result_point = new double[initials.length];
-        final double[] LowerBoundary = new double[initials.length];
-        final double[] UpperBoundary = new double[initials.length];
+        double[] LowerBoundary = new double[initials.length];
+        double[] UpperBoundary = new double[initials.length];
         LowerBoundary[0] = 0.5*m_ImgSource.cols()-100.0;
         LowerBoundary[1] = 0.5*m_ImgSource.rows()-100.0;
-        LowerBoundary[2] = -0.001;
-        LowerBoundary[3] = -0.001;
-        LowerBoundary[4] = -0.001;
-        LowerBoundary[5] = -0.001;
-        LowerBoundary[6] = -0.001;
-        LowerBoundary[7] = -0.001;
-        LowerBoundary[8] = -0.001;
-        LowerBoundary[9] = -0.001;
+        LowerBoundary[2] = -1.0;
+        /*LowerBoundary[3] = -1.0;
+        LowerBoundary[4] = -1.0;
+        LowerBoundary[5] = -1.0;
+        LowerBoundary[6] = -1.0;
+        LowerBoundary[7] = -1.0;
+        LowerBoundary[8] = -1.0;
+        LowerBoundary[9] = -1.0;*/
 
         UpperBoundary[0] = 0.5*m_ImgSource.cols()+100.0;
         UpperBoundary[1] = 0.5*m_ImgSource.rows()+100.0;
-        UpperBoundary[2] = 0.001;
-        UpperBoundary[3] = 0.001;
-        UpperBoundary[4] = 0.001;
-        UpperBoundary[5] = 0.001;
-        UpperBoundary[6] = 0.001;
-        UpperBoundary[7] = 0.001;
-        UpperBoundary[8] = 0.001;
-        UpperBoundary[9] = 0.001;
+        UpperBoundary[2] = 1.0;
+        /*UpperBoundary[3] = 1.0;
+        UpperBoundary[4] = 1.0;
+        UpperBoundary[5] = 1.0;
+        UpperBoundary[6] = 1.0;
+        UpperBoundary[7] = 1.0;
+        UpperBoundary[8] = 1.0;
+        UpperBoundary[9] = 1.0;*/
 
-        final InitialGuess start_values = new InitialGuess(initials);
+        InitialGuess start_values = new InitialGuess(initials);
         SimpleBounds Bounds = new SimpleBounds(LowerBoundary, UpperBoundary);
         BOBYQAOptimizer optim = new BOBYQAOptimizer(2*(initials.length)+1);
         //optim.optimize(OFErrFunc, start_values, maxEval, Bounds);
@@ -737,36 +615,142 @@ public class PlumbLineCalibrationAlgorithm
                 result_point[i] = Double.NaN;
             }
         }
+        /*initials = new double[]{
+            Xh,
+            Yh,
+            result_point[2],
+            0.0
+        };  
+        start_values = new InitialGuess(initials);
+        LowerBoundary = new double[initials.length];
+        UpperBoundary = new double[initials.length];
+        LowerBoundary[0] = 0.5*m_ImgSource.cols()-100.0;
+        LowerBoundary[1] = 0.5*m_ImgSource.rows()-100.0;
+        LowerBoundary[2] = -1.0;
+        LowerBoundary[3] = -1.0;
+        
 
-        final Mat CameraMatrix = new Mat(3, 3, 6/*CV_64F*/);
-        final Mat DistCoeffs = new Mat(1,5, 6/*CV_64F*/);
+        UpperBoundary[0] = 0.5*m_ImgSource.cols()+100.0;
+        UpperBoundary[1] = 0.5*m_ImgSource.rows()+100.0;
+        UpperBoundary[2] = 1.0;
+        UpperBoundary[3] = 1.0;
+        
+        Bounds = new SimpleBounds(LowerBoundary, UpperBoundary);
+        
+        try {
+            final PointValuePair result = optim.optimize(OFErrFunc, start_values, maxEval, Bounds);
+            result_point = result.getPoint();
+            
+        }
+        catch (final TooManyEvaluationsException e) {
+            for (int i = 0; i < result_point.length; i++) {
+                result_point[i] = Double.NaN;
+            }
+        }
+
+        initials = new double[]{
+            Xh,
+            Yh,
+            result_point[2],
+            result_point[3],
+            0.0
+        };  
+        start_values = new InitialGuess(initials);
+        LowerBoundary = new double[initials.length];
+        UpperBoundary = new double[initials.length];
+        LowerBoundary[0] = 0.5*m_ImgSource.cols()-100.0;
+        LowerBoundary[1] = 0.5*m_ImgSource.rows()-100.0;
+        LowerBoundary[2] = -1.0;
+        LowerBoundary[3] = -1.0;
+        LowerBoundary[4] = -1.0;
+        
+
+        UpperBoundary[0] = 0.5*m_ImgSource.cols()+100.0;
+        UpperBoundary[1] = 0.5*m_ImgSource.rows()+100.0;
+        UpperBoundary[2] = 1.0;
+        UpperBoundary[3] = 1.0;
+        UpperBoundary[4] = 1.0;
+        
+        Bounds = new SimpleBounds(LowerBoundary, UpperBoundary);
+        //optim = new BOBYQAOptimizer(2*(initials.length)+1);
+        try {
+            final PointValuePair result = optim.optimize(OFErrFunc, start_values, maxEval, Bounds);
+            result_point = result.getPoint();
+            
+        }
+        catch (final TooManyEvaluationsException e) {
+            for (int i = 0; i < result_point.length; i++) {
+                result_point[i] = Double.NaN;
+            }
+        }
+
+        /*initials = new double[]{
+            Xh,
+            Yh,
+            result_point[2],
+            result_point[3],
+            result_point[4],
+            0.0
+        };  
+        start_values = new InitialGuess(initials);
+        LowerBoundary = new double[initials.length];
+        UpperBoundary = new double[initials.length];
+        LowerBoundary[0] = 0.5*m_ImgSource.cols()-100.0;
+        LowerBoundary[1] = 0.5*m_ImgSource.rows()-100.0;
+        LowerBoundary[2] = -1.0;
+        LowerBoundary[3] = -1.0;
+        LowerBoundary[4] = -1.0;
+        LowerBoundary[5] = -1.0;
+        
+        UpperBoundary[0] = 0.5*m_ImgSource.cols()+100.0;
+        UpperBoundary[1] = 0.5*m_ImgSource.rows()+100.0;
+        UpperBoundary[2] = 1.0;
+        UpperBoundary[3] = 1.0;
+        UpperBoundary[4] = 1.0;
+        UpperBoundary[5] = 1.0;
+       
+        Bounds = new SimpleBounds(LowerBoundary, UpperBoundary);
+        optim = new BOBYQAOptimizer(2*(initials.length)+1);
+        try {
+            final PointValuePair result = optim.optimize(OFErrFunc, start_values, maxEval, Bounds);
+            result_point = result.getPoint();
+            
+        }
+        catch (final TooManyEvaluationsException e) {
+            for (int i = 0; i < result_point.length; i++) {
+                result_point[i] = Double.NaN;
+            }
+        }
+
+        
         Xh = result_point[0];
         Yh = result_point[1];
         K1 = result_point[2];
         K2 = result_point[3];
         P1 = result_point[4];
-        P2 = result_point[5];
-        K3 = result_point[6];
-        K4 = result_point[7];
-        K5 = result_point[8];
-        K6 = result_point[9];
+        P2 = 0.0;//result_point[5];
+        K3 =0.0;//result_point[6];
+        K4 = 0.0;//result_point[7];
+        K5 = 0.0;//result_point[8];
+        K6 = 0.0;//result_point[9];*/
 
-        
-        CameraMatrix.put(0, 0, m_FocalLengthXPixel); CameraMatrix.put(0, 1, 0.0); CameraMatrix.put(0, 2, Xh);
-        CameraMatrix.put(1, 0, 0.0); CameraMatrix.put(1, 1, m_FocalLengthYPixel); CameraMatrix.put(1, 2, Yh);
+        final Mat CameraMatrix = new Mat(3, 3, 6);
+        final Mat DistCoeffs = new Mat(1,5, 6);
+        CameraMatrix.put(0, 0, m_FocalLengthXPixel); CameraMatrix.put(0, 1, 0.0); CameraMatrix.put(0, 2, result_point[0]);
+        CameraMatrix.put(1, 0, 0.0); CameraMatrix.put(1, 1, m_FocalLengthYPixel); CameraMatrix.put(1, 2, result_point[1]);
         CameraMatrix.put(2, 0, 0.0); CameraMatrix.put(2, 1, 0.0); CameraMatrix.put(2, 2, 1.0);
 
-        DistCoeffs.put(0,0,K1);
-        DistCoeffs.put(0,1,K2);
-        DistCoeffs.put(0,2,P1);
-        DistCoeffs.put(0,3,P2);
-        DistCoeffs.put(0,4,K3);
-        DistCoeffs.put(0,4,K4);
-        DistCoeffs.put(0,4,K5);
-        DistCoeffs.put(0,4,K6);
+        DistCoeffs.put(0,0,result_point[2]);
+        DistCoeffs.put(0,1,0.0);
+        DistCoeffs.put(0,2,0.0);
+        DistCoeffs.put(0,3,0.0);
+        DistCoeffs.put(0,4,0.0);
+        DistCoeffs.put(0,4,0.0);
+        DistCoeffs.put(0,4,0.0);
+        DistCoeffs.put(0,4,0.0);
         
         Calib3d.undistort(m_ImgSource, m_DistortionFreeImg, CameraMatrix, DistCoeffs);
-        Imgcodecs.imwrite("DIstortionFreeImage.jpg", m_DistortionFreeImg);
+        Imgcodecs.imwrite("DistortionFreeImage.jpg", m_DistortionFreeImg);
         final Mat ResizeImage = new Mat();
         final Size ScaleSize = new Size(m_ImgSource.cols()/4, m_ImgSource.rows()/4);
         Imgproc.resize(m_DistortionFreeImg, ResizeImage, ScaleSize,0,0,Imgproc.INTER_AREA);
